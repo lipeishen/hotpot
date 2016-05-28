@@ -380,18 +380,18 @@ void Chunk::start_chunk_pool_cleaner_task() {
 }
 
 //------------------------------Arena------------------------------------------
-NOT_PRODUCT(volatile jint Arena::_instance_count = 0;)
-
+NOT_PRODUCT(volatile jint Arena::_instance_count = 0;)  //记录当前Arena实例的数量
+//有参数构造函数
 Arena::Arena(size_t init_size) {
   size_t round_size = (sizeof (char *)) - 1;
   init_size = (init_size+round_size) & ~round_size;
   _first = _chunk = new (AllocFailStrategy::EXIT_OOM, init_size) Chunk(init_size);
   _hwm = _chunk->bottom();      // Save the cached hwm, max
   _max = _chunk->top();
-  set_size_in_bytes(init_size);
+  set_size_in_bytes(init_size);//设置Arena占用的size
   NOT_PRODUCT(Atomic::inc(&_instance_count);)
 }
-
+//无参数构造函数
 Arena::Arena() {
   _first = _chunk = new (AllocFailStrategy::EXIT_OOM, Chunk::init_size) Chunk(Chunk::init_size);
   _hwm = _chunk->bottom();      // Save the cached hwm, max
@@ -399,9 +399,9 @@ Arena::Arena() {
   set_size_in_bytes(Chunk::init_size);
   NOT_PRODUCT(Atomic::inc(&_instance_count);)
 }
-
+//对象拷贝
 Arena *Arena::move_contents(Arena *copy) {
-  copy->destruct_contents();
+  copy->destruct_contents();//清理copyz占用的空间
   copy->_chunk = _chunk;
   copy->_hwm   = _hwm;
   copy->_max   = _max;
@@ -409,14 +409,14 @@ Arena *Arena::move_contents(Arena *copy) {
 
   // workaround rare racing condition, which could double count
   // the arena size by native memory tracking
-  size_t size = size_in_bytes();
-  set_size_in_bytes(0);
-  copy->set_size_in_bytes(size);
+  size_t size = size_in_bytes(); //获取当前Arena对象占用的空间
+  set_size_in_bytes(0); //先把当前Arena对象占用的空间置为0
+  copy->set_size_in_bytes(size); //最后当前Arena对象占用的空间设为copy对象占用的空间大小
   // Destroy original arena
   reset();
   return copy;            // Return Arena with contents
 }
-
+//析构函数
 Arena::~Arena() {
   destruct_contents();
   NOT_PRODUCT(Atomic::dec(&_instance_count);)
@@ -458,6 +458,7 @@ void Arena::operator delete(void* p) {
 }
 
 // Destroy this arenas contents and reset to empty
+//清空Arena占用的空间
 void Arena::destruct_contents() {
   if (UseMallocOnly && _first != NULL) {
     char* end = _first->next() ? _first->top() : _hwm;
@@ -471,33 +472,34 @@ void Arena::destruct_contents() {
 }
 
 // This is high traffic method, but many calls actually don't
-// change the size
+// change the size 此方法是频繁调用的方法，主要作用是重新设置占用空间的大小
 void Arena::set_size_in_bytes(size_t size) {
   if (_size_in_bytes != size) {
     _size_in_bytes = size;
-    MemTracker::record_arena_size((address)this, size);
-  }
+    MemTracker::record_arena_size((address)this, size); //跟踪当前Arena的内存
+   }
 }
 
-// Total of all Chunks in arena
+// Total of all Chunks in  use of arena 计算arena中所有Chunk已经使用的空间
 size_t Arena::used() const {
-  size_t sum = _chunk->length() - (_max-_hwm); // Size leftover in this Chunk
+  size_t sum = _chunk->length() - (_max-_hwm); // Size leftover in this Chunk 剩余的大小
   register Chunk *k = _first;
-  while( k != _chunk) {         // Whilst have Chunks in a row
+  while( k != _chunk) {         // Whilst（同时） have Chunks in a row
     sum += k->length();         // Total size of this Chunk
-    k = k->next();              // Bump along to next Chunk
+    k = k->next();              // Bump（碰撞，撞击） along to next Chunk
   }
   return sum;                   // Return total consumed space.
 }
-
+//内存溢出提示
 void Arena::signal_out_of_memory(size_t sz, const char* whence) const {
   vm_exit_out_of_memory(sz, whence);
 }
 
-// Grow a new Chunk
+// Grow a new Chunk 为当前Arena对象中chunk资源链中增加一个Chunk
+//注意返回类型的void指针
 void* Arena::grow(size_t x, AllocFailType alloc_failmode) {
   // Get minimal required size.  Either real big, or even bigger for giant objs
-  size_t len = MAX2(x, (size_t) Chunk::size);
+  size_t len = MAX2(x, (size_t) Chunk::size);//返回较大的那个值
 
   Chunk *k = _chunk;            // Get filled-up chunk address
   _chunk = new (alloc_failmode, len) Chunk(len);
@@ -509,7 +511,7 @@ void* Arena::grow(size_t x, AllocFailType alloc_failmode) {
   else _first = _chunk;
   _hwm  = _chunk->bottom();     // Save the cached hwm, max
   _max =  _chunk->top();
-  set_size_in_bytes(size_in_bytes() + len);
+  set_size_in_bytes(size_in_bytes() + len);//在已有的占用空间上增加新加chunk的大小len
   void* result = _hwm;
   _hwm += x;
   return result;
@@ -564,6 +566,7 @@ void *Arena::Arealloc(void* old_ptr, size_t old_size, size_t new_size, AllocFail
 
 
 // Determine if pointer belongs to this Arena or not.
+//原理是从链表中查找元素
 bool Arena::contains( const void *ptr ) const {
 #ifdef ASSERT
   if (UseMallocOnly) {
@@ -679,7 +682,7 @@ void    AllocStats::print() {
 inline void Arena::free_all(char** start, char** end) {
   for (char** p = start; p < end; p++) if (*p) os::free(*p);
 }
-
+//清楚Arena 中chunk 所占用的空间
 void Arena::free_malloced_objects(Chunk* chunk, char* hwm, char* max, char* hwm2) {
   assert(UseMallocOnly, "should not call");
   // free all objects malloced since resource mark was created; resource area

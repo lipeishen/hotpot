@@ -297,8 +297,8 @@ protected:
 
   Chunk *_first;                // First chunk
   Chunk *_chunk;                // current chunk
-  char *_hwm, *_max;            // High water mark and max in current chunk
-  size_t _size_in_bytes;        // Size of arena (used for native memory tracking)
+  char *_hwm, *_max;            // High water mark and max in current chunk// 当前chunk地址水位线（最小值）和最大值，应该是chunk占用空间的地址范围
+  size_t _size_in_bytes;        // Size of arena (used for native memory tracking)//Arena 所占用的空间
 
   // Get a new Chunk of at least size x
   void* grow(size_t x, AllocFailType alloc_failmode = AllocFailStrategy::EXIT_OOM);
