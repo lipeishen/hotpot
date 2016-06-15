@@ -35,16 +35,14 @@
 #include "oops/oop.pcgc.inline.hpp"
 
 ASParNewGeneration::ASParNewGeneration(ReservedSpace rs,
-                                       size_t initial_byte_size,
-                                       size_t min_byte_size,
-                                       int level) :
-  ParNewGeneration(rs, initial_byte_size, level),
+size_t initial_byte_size,size_t min_byte_size, int level) : ParNewGeneration(rs, initial_byte_size, level),
   _min_gen_size(min_byte_size) {}
 
 const char* ASParNewGeneration::name() const {
   return "adaptive size par new generation";
 }
 
+//设置年轻代转化为老年代经历次数的阈值
 void ASParNewGeneration::adjust_desired_tenuring_threshold() {
   assert(UseAdaptiveSizePolicy,
     "Should only be used with UseAdaptiveSizePolicy");
@@ -70,6 +68,7 @@ void ASParNewGeneration::resize(size_t eden_size, size_t survivor_size) {
   }
 }
 
+//返回内存中剩余空间大小（一般会预留一个最小值）
 size_t ASParNewGeneration::available_to_min_gen() {
   assert(virtual_space()->committed_size() >= min_gen_size(), "Invariant");
   return virtual_space()->committed_size() - min_gen_size();
@@ -78,15 +77,17 @@ size_t ASParNewGeneration::available_to_min_gen() {
 // This method assumes that from-space has live data and that
 // any shrinkage of the young gen is limited by location of
 // from-space.
+//返回存活对象占用的大小
 size_t ASParNewGeneration::available_to_live() const {
 #undef SHRINKS_AT_END_OF_EDEN
 #ifdef SHRINKS_AT_END_OF_EDEN
   size_t delta_in_survivor = 0;
   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
-  const size_t space_alignment = heap->intra_heap_alignment();
+  const size_t space_alignment = heap->intra_heap_alignment(); //返回年轻代和老年代的界线
   const size_t gen_alignment = heap->object_heap_alignment();
-
+ // 易变空间
   MutableSpace* space_shrinking = NULL;
+  //获取from 和to 空间的底端地址较大的那个，方便和虚拟空间的地址比较
   if (from_space()->end() > to_space()->end()) {
     space_shrinking = from_space();
   } else {
@@ -96,14 +97,14 @@ size_t ASParNewGeneration::available_to_live() const {
   // Include any space that is committed but not included in
   // the survivor spaces.
   assert(((HeapWord*)virtual_space()->high()) >= space_shrinking->end(),
-    "Survivor space beyond high end");
+    "Survivor space beyond high end"); //如果年轻代分配的地址空间超出了虚拟空间地址最大值，就会提示
   size_t unused_committed = pointer_delta(virtual_space()->high(),
-    space_shrinking->end(), sizeof(char));
+    space_shrinking->end(), sizeof(char));//计算未使用空间占用的字节数
 
   if (space_shrinking->is_empty()) {
     // Don't let the space shrink to 0
     assert(space_shrinking->capacity_in_bytes() >= space_alignment,
-      "Space is too small");
+      "Space is too small");//年轻代分配的空间要超过设定的最小值，否则会提醒分配空间太小
     delta_in_survivor = space_shrinking->capacity_in_bytes() - space_alignment;
   } else {
     delta_in_survivor = pointer_delta(space_shrinking->end(),
@@ -116,7 +117,7 @@ size_t ASParNewGeneration::available_to_live() const {
   return delta_in_bytes;
 #else
   // The only space available for shrinking is in to-space if it
-  // is above from-space.
+  // is above from-space.// to-space 一般用来存放存活的对象
   if (to()->bottom() > from()->bottom()) {
     const size_t alignment = os::vm_page_size();
     if (to()->capacity() < alignment) {
@@ -135,11 +136,11 @@ size_t ASParNewGeneration::available_to_live() const {
 //      input "bytes"
 //      bytes to the minimum young gen size
 //      bytes to the size currently being used + some small extra
-size_t ASParNewGeneration::limit_gen_shrink (size_t bytes) {
+size_t ASParNewGeneration::limit_gen_shrink (size_t bytes) {//年轻代缩减到最小占用的字节数
   // Allow shrinkage into the current eden but keep eden large enough
   // to maintain the minimum young gen size
   bytes = MIN3(bytes, available_to_min_gen(), available_to_live());
-  return align_size_down(bytes, os::vm_page_size());
+  return align_size_down(bytes, os::vm_page_size()); ////计算bytes 以os::vm_page_size() 为倍数的下界数
 }
 
 // Note that the the alignment used is the OS page size as
@@ -147,10 +148,7 @@ size_t ASParNewGeneration::limit_gen_shrink (size_t bytes) {
 // (as is done in the ASPSYoungGen/ASPSOldGen)
 bool ASParNewGeneration::resize_generation(size_t eden_size,
                                            size_t survivor_size) {
-  const size_t alignment = os::vm_page_size();
-  size_t orig_size = virtual_space()->committed_size();
-  bool size_changed = false;
-
+  const size_t alignment = os::vm_page_size();//下限是一页大小
   // There used to be this guarantee there.
   // guarantee ((eden_size + 2*survivor_size)  <= _max_gen_size, "incorrect input arguments");
   // Code below forces this requirement.  In addition the desired eden
@@ -162,20 +160,20 @@ bool ASParNewGeneration::resize_generation(size_t eden_size,
 
   // Adjust new generation size
   const size_t eden_plus_survivors =
-          align_size_up(eden_size + 2 * survivor_size, alignment);
+          align_size_up(eden_size + 2 * survivor_size, alignment);//计算年轻代的总大小 以系统分页为倍数的上界数，并赋值给一个常量
   size_t desired_size = MAX2(MIN2(eden_plus_survivors, max_gen_size()),
                              min_gen_size());
   assert(desired_size <= max_gen_size(), "just checking");
 
-  if (desired_size > orig_size) {
-    // Grow the generation
+  if (desired_size > orig_size) {// desired_size:期望调整的大小，orig_size：未调整之前的大小
+    // Grow the generation， 要把新生代调大
     size_t change = desired_size - orig_size;
     assert(change % alignment == 0, "just checking");
-    if (expand(change)) {
+    if (expand(change)) {//执行空间扩增
       return false; // Error if we fail to resize!
     }
     size_changed = true;
-  } else if (desired_size < orig_size) {
+  } else if (desired_size < orig_size) {//要把新生代调小
     size_t desired_change = orig_size - desired_size;
     assert(desired_change % alignment == 0, "just checking");
 
@@ -190,7 +188,7 @@ bool ASParNewGeneration::resize_generation(size_t eden_size,
   } else {
     if (Verbose && PrintGC) {
       if (orig_size == max_gen_size()) {
-        gclog_or_tty->print_cr("ASParNew generation size at maximum: "
+        gclog_or_tty->print_cr("ASParNew generation size at maximum: " //gclog_or_tty 是一个outputStream对象
           SIZE_FORMAT "K", orig_size/K);
       } else if (orig_size == min_gen_size()) {
         gclog_or_tty->print_cr("ASParNew generation size at minium: "
@@ -204,7 +202,7 @@ bool ASParNewGeneration::resize_generation(size_t eden_size,
                   (HeapWord*)virtual_space()->high());
     GenCollectedHeap::heap()->barrier_set()->resize_covered_region(cmr);
 
-    if (Verbose && PrintGC) {
+    if (Verbose && PrintGC) {//Verbose 为true，表示要显示详细信息，PrintGC：为每一次新生代（young generation）的GC和每一次的Full GC打印一行信息，如果它为true，表示要打印信息
       size_t current_size  = virtual_space()->committed_size();
       gclog_or_tty->print_cr("ASParNew generation size changed: "
                              SIZE_FORMAT "K->" SIZE_FORMAT "K",
@@ -212,13 +210,14 @@ bool ASParNewGeneration::resize_generation(size_t eden_size,
     }
   }
 
+  //guarantee的作用类似于assert
   guarantee(eden_plus_survivors <= virtual_space()->committed_size() ||
             virtual_space()->committed_size() == max_gen_size(), "Sanity");
 
   return true;
 }
 
-void ASParNewGeneration::reset_survivors_after_shrink() {
+void ASParNewGeneration::reset_survivors_after_shrink() {//压缩新生代之后，重新设置survivors区的大小
 
   GenCollectedHeap* gch = GenCollectedHeap::heap();
   HeapWord* new_end = (HeapWord*)virtual_space()->high();
@@ -229,7 +228,7 @@ void ASParNewGeneration::reset_survivors_after_shrink() {
     assert(new_end >= to()->bottom(), "Shrink was too large");
     // Was there a shrink of the survivor space?
     if (new_end < to()->end()) {
-      MemRegion mr(to()->bottom(), new_end);
+      MemRegion mr(to()->bottom(), new_end);//根据内存地址边界创建内存区域对象
       to()->initialize(mr,
                        SpaceDecorator::DontClear,
                        SpaceDecorator::DontMangle);

@@ -371,13 +371,13 @@ extern int LogMinObjAlignmentInBytes;
 // for use in places like enum definitions that require compile-time constant
 // expressions and a function for all other places so as to get type checking.
 
-#define align_size_up_(size, alignment) (((size) + ((alignment) - 1)) & ~((alignment) - 1))
+#define align_size_up_(size, alignment) (((size) + ((alignment) - 1)) & ~((alignment) - 1))//计算size 以alignment 为倍数的上界数
 
 inline intptr_t align_size_up(intptr_t size, intptr_t alignment) {
   return align_size_up_(size, alignment);
 }
 
-#define align_size_down_(size, alignment) ((size) & ~((alignment) - 1))
+#define align_size_down_(size, alignment) ((size) & ~((alignment) - 1)) //计算size 以alignment 为倍数的下界数，~((alignment) - 1)可以称为size的对齐掩码size_mask
 
 inline intptr_t align_size_down(intptr_t size, intptr_t alignment) {
   return align_size_down_(size, alignment);
