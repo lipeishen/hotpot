@@ -235,6 +235,7 @@ void ASParNewGeneration::reset_survivors_after_shrink() {//Ñ¹ËõÐÂÉú´úÖ®ºó£¬ÖØÐÂÉ
     }
   }
 }
+//µ÷ÕûEdenºÍsurvivor ¿Õ¼äµÄ´óÐ¡
 void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
                                        size_t requested_survivor_size) {
   assert(UseAdaptiveSizePolicy, "sanity check");
@@ -244,14 +245,14 @@ void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
   assert(heap->kind() == CollectedHeap::GenCollectedHeap, "Sanity");
 
 
-  // We require eden and to space to be empty
+  // We require eden and to space to be empty µ÷ÕûÊ±Á½ÕßÐèÎª¿Õ
   if ((!eden()->is_empty()) || (!to()->is_empty())) {
     return;
   }
 
-  size_t cur_eden_size = eden()->capacity();
+  size_t cur_eden_size = eden()->capacity();//eden¿Õ¼äµ±Ç°ÈÝÁ¿
 
-  if (PrintAdaptiveSizePolicy && Verbose) {
+  if (PrintAdaptiveSizePolicy && Verbose) {// Verbose Îªtrue ÏÔÊ¾ÏêÏ¸ÐÅÏ¢
     gclog_or_tty->print_cr("ASParNew::resize_spaces(requested_eden_size: "
                   SIZE_FORMAT
                   ", requested_survivor_size: " SIZE_FORMAT ")",
@@ -280,11 +281,12 @@ void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
   }
 
   // There's nothing to do if the new sizes are the same as the current
+  // ¸ü¸ÄµÄ³ß´çºÍÔ­À´Ò»Ñù´ó£¬Ê²Ã´Ò²²»×ö
   if (requested_survivor_size == to()->capacity() &&
       requested_survivor_size == from()->capacity() &&
       requested_eden_size == eden()->capacity()) {
     if (PrintAdaptiveSizePolicy && Verbose) {
-      gclog_or_tty->print_cr("    capacities are the right sizes, returning");
+      gclog_or_tty->print_cr("capacities are the right sizes, returning");
     }
     return;
   }
@@ -297,7 +299,7 @@ void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
   char* to_end     = (char*)to()->end();
 
   const size_t alignment = os::vm_page_size();
-  const bool maintain_minimum =
+  const bool maintain_minimum =    //±ä¸üºóµÄÈÝÁ¿ÓëÐÂÉú´úµÄ×îÐ¡ÈÝÁ¿±È½Ï
     (requested_eden_size + 2 * requested_survivor_size) <= min_gen_size();
 
   // Check whether from space is below to space
@@ -306,10 +308,14 @@ void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
     if (PrintAdaptiveSizePolicy && Verbose) {
       gclog_or_tty->print_cr("  Eden, from, to:");
     }
+    //Èý¿éÇøÓòÔÚÄÚ´æÖÐµÄÎ»ÖÃÎªÈçÏÂ£ºÄÚ´æµØÖ·´Ó×óÏòÓÒÒÀ´ÎÔö´ó
 
+    //        |-----------|-----------|----------------|
+     //       |    eden   |    from   |       to       |
+     //       |-----------|-----------|----------------|
     // Set eden
     // "requested_eden_size" is a goal for the size of eden
-    // and may not be attainable.  "eden_size" below is
+    // and may not be attainable£¨¿É´ï£©.  "eden_size" below is
     // calculated based on the location of from-space and
     // the goal for the size of eden.  from-space is
     // fixed in place because it contains live data.
@@ -331,7 +337,7 @@ void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
                        pointer_delta(from_start, eden_start, sizeof(char)));
     }
 
-    eden_size = align_size_down(eden_size, alignment);
+    eden_size = align_size_down(eden_size, alignment);//¼ÆËãeden_size ÒÔalignmentÎª±¶ÊýµÄÏÂ½çÊý
     eden_end = eden_start + eden_size;
     assert(eden_end >= eden_start, "addition overflowed");
 
@@ -344,8 +350,8 @@ void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
     to_start = (char*)pointer_delta(to_end, (char*)requested_survivor_size,
                                     sizeof(char));
 
-    // Does the optimal to-space overlap from-space?
-    if (to_start < (char*)from()->end()) {
+    // Does the optimal to-space overlap(ÖØµþ) from-space?
+    if (to_start < (char*)from()->end()) { // to-spaceºÍfrom-spaceÇøÓòÓÐÖØµþ²¿·Ö
       // Calculate the minimum offset possible for from_end
       size_t from_size = pointer_delta(from()->top(), from_start, sizeof(char));
 
@@ -363,7 +369,7 @@ void ASParNewGeneration::resize_spaces(size_t requested_eden_size,
 
       // Now update to_start with the new from_end
       to_start = MAX2(from_end, to_start);
-    } else {
+    } else { //Á½¸öÇøÓò²»ÖØµþ
       // If shrinking, move to-space down to abut the end of from-space
       // so that shrinking will move to-space down.  If not shrinking
       // to-space is moving up to allow for growth on the next expansion.

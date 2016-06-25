@@ -125,7 +125,7 @@ class Space: public CHeapObj<mtGC> {
     _bottom(NULL), _end(NULL), _preconsumptionDirtyCardClosure(NULL) { }
 
  public:
-  // Accessors
+  // Accessors  ´æÈ¡Æ÷
   HeapWord* bottom() const         { return _bottom; }
   HeapWord* end() const            { return _end;    }
   virtual void set_bottom(HeapWord* value) { _bottom = value; }
